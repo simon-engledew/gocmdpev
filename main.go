@@ -22,6 +22,7 @@ const (
 type NodeType string
 const (
   Limit NodeType = "Limit"
+  Append = "Append"
   Sort = "Sort"
   NestedLoop = "Nested Loop"
   MergeJoin = "Merge Join"
@@ -48,20 +49,21 @@ var OutputFormat = color.New(color.FgYellow).SprintFunc()
   // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
 
 var Descriptions = map[NodeType]string {
-   Limit: "Returns a specified number of rows from a record set.",
-   Sort: "Sorts a record set based on the specified sort key.",
-   NestedLoop: "Merges two record sets by looping through every record in the first set and trying to find a match in the second set. All matching records are returned.",
-   MergeJoin: "Merges two record sets by first sorting them on a join key.",
-   Hash: "Generates a hash table from the records in the input recordset. Hash is used by Hash Join.",
-   HashJoin: "Joins to record sets by hashing one of them (using a Hash Scan).",
-   Aggregate: "Groups records together based on a GROUP BY or aggregate function (e.g. sum()).",
-   Hashaggregate: "Groups records together based on a GROUP BY or aggregate function (e.g. sum()). Hash Aggregate uses a hash to first organize the records by a key.",
-   SequenceScan: "Finds relevant records by sequentially scanning the input record set. When reading from a table, Seq Scans (unlike Index Scans) perform a single read operation (only the table is read).",
-   IndexScan: "Finds relevant records based on an Index. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table.",
-   IndexOnlyScan: "Finds relevant records based on an Index. Index Only Scans perform a single read operation from the index and do not read from the corresponding table.",
-   BitmapHeapScan: "Searches through the pages returned by the Bitmap Index Scan for relevant rows.",
-   BitmapIndexScan: "Uses a Bitmap Index (index which uses 1 bit per page) to find all relevant pages. Results of this node are fed to the Bitmap Heap Scan.",
-   CTEScan: "Performs a sequential scan of Common Table Expression (CTE) query results. Note that results of a CTE are materialized (calculated and temporarily stored).",
+  Append: "Used in a UNION to merge multiple record sets by appending them together.",
+  Limit: "Returns a specified number of rows from a record set.",
+  Sort: "Sorts a record set based on the specified sort key.",
+  NestedLoop: "Merges two record sets by looping through every record in the first set and trying to find a match in the second set. All matching records are returned.",
+  MergeJoin: "Merges two record sets by first sorting them on a join key.",
+  Hash: "Generates a hash table from the records in the input recordset. Hash is used by Hash Join.",
+  HashJoin: "Joins to record sets by hashing one of them (using a Hash Scan).",
+  Aggregate: "Groups records together based on a GROUP BY or aggregate function (e.g. sum()).",
+  Hashaggregate: "Groups records together based on a GROUP BY or aggregate function (e.g. sum()). Hash Aggregate uses a hash to first organize the records by a key.",
+  SequenceScan: "Finds relevant records by sequentially scanning the input record set. When reading from a table, Seq Scans (unlike Index Scans) perform a single read operation (only the table is read).",
+  IndexScan: "Finds relevant records based on an Index. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table.",
+  IndexOnlyScan: "Finds relevant records based on an Index. Index Only Scans perform a single read operation from the index and do not read from the corresponding table.",
+  BitmapHeapScan: "Searches through the pages returned by the Bitmap Index Scan for relevant rows.",
+  BitmapIndexScan: "Uses a Bitmap Index (index which uses 1 bit per page) to find all relevant pages. Results of this node are fed to the Bitmap Heap Scan.",
+  CTEScan: "Performs a sequential scan of Common Table Expression (CTE) query results. Note that results of a CTE are materialized (calculated and temporarily stored).",
 }
 
 type Explain struct {
@@ -219,7 +221,7 @@ func ProcessPlan(explain * Explain, plan * Plan) {
 }
 
 func WriteExplain(writer io.Writer, explain * Explain) {
-  fmt.Fprintf(writer, "○ Total Cost: %.2f\n", explain.TotalCost)
+  fmt.Fprintf(writer, "○ Total Cost: %s\n", humanize.Commaf(explain.TotalCost))
   fmt.Fprintf(writer, "○ Planning Time: %s\n", DurationToString(explain.PlanningTime))
   fmt.Fprintf(writer, "○ Execution Time: %s\n", DurationToString(explain.ExecutionTime))
   fmt.Fprintf(writer, PrefixFormat("┬\n"))
@@ -227,16 +229,78 @@ func WriteExplain(writer io.Writer, explain * Explain) {
   WritePlan(writer, explain, &explain.Plan, "", 0, len(explain.Plan.Plans) == 1)
 }
 
-func WriteWithPrefix(writer io.Writer, prefix string) func(string, ...interface{}) (int, error) {
-  return func(format string, a... interface{}) (int, error) {
-    return fmt.Fprintf(writer, fmt.Sprintf("%s%s\n", PrefixFormat(prefix), format), a...)
+func FormatDetails(plan * Plan) (string) {
+  var details []string
+
+  if (plan.ScanDirection != "") {
+    details = append(details, plan.ScanDirection)
+  }
+
+  if (plan.Strategy != "") {
+    details = append(details, plan.Strategy)
+  }
+
+  if len(details) > 0 {
+    return MutedFormat(fmt.Sprintf(" [%v]", strings.Join(details, ", ")))
+  }
+
+  return ""
+}
+
+func FormatTag(tag string) (string) {
+  return TagFormat(fmt.Sprintf(" %v ", tag))
+}
+
+func FormatTags(plan * Plan) (string) {
+  var tags []string
+
+  if plan.Slowest {
+    tags = append(tags, FormatTag("slowest"))
+  }
+  if plan.Costliest {
+    tags = append(tags, FormatTag("costliest"))
+  }
+  if plan.Largest {
+    tags = append(tags, FormatTag("largest"))
+  }
+  if plan.PlannerRowEstimateFactor >= 100 {
+    tags = append(tags, FormatTag("bad estimate"))
+  }
+
+  return strings.Join(tags, " ")
+}
+
+func GetTerminator(index int, plan * Plan) (string) {
+  if index == 0 {
+    if len(plan.Plans) == 0 {
+      return "⌡► "
+    } else {
+      return "├►  "
+    }
+  } else {
+    if len(plan.Plans) == 0 {
+      return "   "
+    } else {
+      return "│  "
+    }
   }
 }
 
 func WritePlan(writer io.Writer, explain * Explain, plan * Plan, prefix string, depth int, lastChild bool) {
-  ParentOut := WriteWithPrefix(writer, prefix)
+  currentPrefix := prefix
 
-  ParentOut(PrefixFormat("│"))
+  var Output = func(format string, a... interface{}) (int, error) {
+    return fmt.Fprintf(writer, fmt.Sprintf("%s%s\n", PrefixFormat(currentPrefix), format), a...)
+  }
+
+  Output(PrefixFormat("│"))
+
+  joint := "├"
+  if len(plan.Plans) > 1 || lastChild {
+    joint = "└"
+  }
+
+  Output("%v %v%v %v", PrefixFormat(joint + "─⌠"), BoldFormat(plan.NodeType), FormatDetails(plan), FormatTags(plan));
 
   if len(plan.Plans) > 1 || lastChild {
     prefix = prefix + "  "
@@ -244,101 +308,57 @@ func WritePlan(writer io.Writer, explain * Explain, plan * Plan, prefix string, 
     prefix = prefix + "│ "
   }
 
-  var tags []string
-
-  if plan.Slowest {
-    tags = append(tags, TagFormat(" slowest "))
-  }
-  if plan.Costliest {
-    tags = append(tags, TagFormat(" costliest "))
-  }
-  if plan.Largest {
-    tags = append(tags, TagFormat(" largest "))
-  }
-  if plan.PlannerRowEstimateFactor >= 100 {
-    tags = append(tags, TagFormat(" bad estimate "))
-  }
-
-  joint := "├"
-  if len(plan.Plans) > 1 || lastChild {
-    joint = "└"
-  }
-
-  direction := ""
-  if (plan.ScanDirection != "") {
-    direction = MutedFormat(fmt.Sprintf("%v ", plan.ScanDirection))
-  }
-
-  strategy := ""
-
-  if (plan.Strategy != "") {
-    strategy = fmt.Sprintf(" (%v)", plan.Strategy)
-  }
-
-  ParentOut("%v %v%v%v %v", PrefixFormat(joint + "─⌠"), direction, BoldFormat(plan.NodeType), strategy, strings.Join(tags, " "));
-
-  Out := WriteWithPrefix(writer, prefix + PrefixFormat("│ "))
+  currentPrefix = prefix + "│ "
 
   for _, line := range strings.Split(wordwrap.WrapString(Descriptions[plan.NodeType], 60), "\n") {
-    Out("%v", MutedFormat(line))
+    Output("%v", MutedFormat(line))
   }
 
-  Out("○ %v %v (%.0f%%)", "Duration:", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
+  Output("○ %v %v (%.0f%%)", "Duration:", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
 
-  Out("○ %v %.2f (%.0f%%)", "Cost:", plan.ActualCost, (plan.ActualCost / explain.TotalCost) * 100)
+  Output("○ %v %v (%.0f%%)", "Cost:", humanize.Commaf(plan.ActualCost), (plan.ActualCost / explain.TotalCost) * 100)
 
-  Out("○ %v %v", "Rows:", humanize.Comma(int64(plan.ActualRows)))
+  Output("○ %v %v", "Rows:", humanize.Comma(int64(plan.ActualRows)))
 
-  Out = WriteWithPrefix(writer, prefix + PrefixFormat("│   "))
+  currentPrefix = currentPrefix + "  "
 
   if plan.JoinType != "" {
-    Out("%v %v", plan.JoinType, MutedFormat("join"));
+    Output("%v %v", plan.JoinType, MutedFormat("join"));
   }
 
   if plan.RelationName != "" {
-    Out("%v %v.%v", MutedFormat("on"), plan.Schema, plan.RelationName);
+    Output("%v %v.%v", MutedFormat("on"), plan.Schema, plan.RelationName);
   }
 
   if plan.IndexName != "" {
-    Out("%v %v", MutedFormat("using"), plan.IndexName);
+    Output("%v %v", MutedFormat("using"), plan.IndexName);
   }
 
   if (plan.IndexCondition != "") {
-    Out("%v %v", MutedFormat("condition"), plan.IndexCondition);
+    Output("%v %v", MutedFormat("condition"), plan.IndexCondition);
   }
 
   if plan.Filter != "" {
-    Out("%v %v [-%v rows]", MutedFormat("filter"), plan.Filter, humanize.Comma(int64(plan.RowsRemovedByFilter)));
+    Output("%v %v [-%v rows]", MutedFormat("filter"), plan.Filter, humanize.Comma(int64(plan.RowsRemovedByFilter)));
   }
 
   if (plan.HashCondition != "") {
-    Out("%v %v", MutedFormat("on"), plan.HashCondition);
+    Output("%v %v", MutedFormat("on"), plan.HashCondition);
   }
 
   if plan.CTEName != "" {
-    Out("CTE %v", plan.CTEName);
+    Output("CTE %v", plan.CTEName);
   }
 
   if (plan.PlannerRowEstimateFactor != 0) {
-    Out("%v %vestimated %v %.2fx", MutedFormat("rows"), plan.PlannerRowEstimateDirection, MutedFormat("by"), plan.PlannerRowEstimateFactor)
+    Output("%v %vestimated %v %.2fx", MutedFormat("rows"), plan.PlannerRowEstimateDirection, MutedFormat("by"), plan.PlannerRowEstimateFactor)
   }
 
-  joint = "├"
-  if len(plan.Plans) == 0 {
-    joint = "⌡"
-  }
+  currentPrefix = prefix
 
   if len(plan.Output) > 0 {
     for index, line := range strings.Split(wordwrap.WrapString(strings.Join(plan.Output, " + "), 60), "\n") {
-      if index == 0 {
-        fmt.Fprintln(writer, PrefixFormat(prefix + joint + "► ") + OutputFormat(line))
-      } else {
-        if len(plan.Plans) == 0 {
-          fmt.Fprintln(writer, PrefixFormat(prefix) + "   " + OutputFormat(line))
-        } else {
-          fmt.Fprintln(writer, PrefixFormat(prefix + "│  ") + OutputFormat(line))
-        }
-      }
+      Output(PrefixFormat(GetTerminator(index, plan)) + OutputFormat(line))
     }
   }
 
