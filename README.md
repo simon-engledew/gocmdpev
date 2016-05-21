@@ -17,4 +17,4 @@ Then pipe the resulting query plan into `gocmdpev`.
 
 On MacOS you can just grab the query on your clipboard and run this one-liner:
 
-`pbpaste | sed 's/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | psql -qAt | gocmdpev`
+`pbpaste | sed 's/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | psql -qAt <DATABASE> | gocmdpev`
