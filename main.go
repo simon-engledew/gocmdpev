@@ -10,6 +10,7 @@ import (
   "strings"
   "github.com/fatih/color"
   "github.com/mitchellh/go-wordwrap"
+  "github.com/dustin/go-humanize"
 )
 
 type EstimateDirection string
@@ -43,6 +44,7 @@ var BoldFormat = color.New(color.FgHiWhite).SprintFunc()
 var GoodFormat = color.New(color.FgGreen).SprintFunc()
 var WarningFormat = color.New(color.FgHiYellow).SprintFunc()
 var CriticalFormat = color.New(color.FgHiRed).SprintFunc()
+var OutputFormat = color.New(color.FgYellow).SprintFunc()
   // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
 
 var Descriptions = map[NodeType]string {
@@ -283,9 +285,9 @@ func WritePlan(writer io.Writer, explain * Explain, plan * Plan, prefix string, 
 
   Out("○ %v %v (%.0f%%)", "Duration:", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
 
-  Out("○ %v %v (%.0f%%)", "Cost:", plan.ActualCost, (plan.ActualCost / explain.TotalCost) * 100)
+  Out("○ %v %.2f (%.0f%%)", "Cost:", plan.ActualCost, (plan.ActualCost / explain.TotalCost) * 100)
 
-  Out("○ %v %v", "Rows:", plan.ActualRows)
+  Out("○ %v %v", "Rows:", humanize.Comma(int64(plan.ActualRows)))
 
   Out = WriteWithPrefix(writer, prefix + PrefixFormat("│   "))
 
@@ -306,7 +308,7 @@ func WritePlan(writer io.Writer, explain * Explain, plan * Plan, prefix string, 
   }
 
   if plan.Filter != "" {
-    Out("%v %v [-%v rows]", MutedFormat("filter"), plan.Filter, plan.RowsRemovedByFilter);
+    Out("%v %v [-%v rows]", MutedFormat("filter"), plan.Filter, humanize.Comma(int64(plan.RowsRemovedByFilter)));
   }
 
   if (plan.HashCondition != "") {
@@ -327,7 +329,17 @@ func WritePlan(writer io.Writer, explain * Explain, plan * Plan, prefix string, 
   }
 
   if len(plan.Output) > 0 {
-    fmt.Fprintln(writer, PrefixFormat(prefix + joint + "► ") + strings.Join(plan.Output, " "))
+    for index, line := range strings.Split(wordwrap.WrapString(strings.Join(plan.Output, " + "), 60), "\n") {
+      if index == 0 {
+        fmt.Fprintln(writer, PrefixFormat(prefix + joint + "► ") + OutputFormat(line))
+      } else {
+        if len(plan.Plans) == 0 {
+          fmt.Fprintln(writer, PrefixFormat(prefix) + "   " + OutputFormat(line))
+        } else {
+          fmt.Fprintln(writer, PrefixFormat(prefix + "│  ") + OutputFormat(line))
+        }
+      }
+    }
   }
 
   for index, _ := range plan.Plans {
