@@ -187,35 +187,67 @@ func ProcessPlan(explain * Explain, plan * Plan) {
 }
 
 func PrintExplain(explain * Explain) {
-  fmt.Printf("Total Cost: %.2f\n", explain.TotalCost)
-  fmt.Printf("Planning Time: %s\n", DurationToString(explain.PlanningTime))
-  fmt.Printf("Execution Time: %s\n", DurationToString(explain.ExecutionTime))
+  fmt.Printf("○ Total Cost: %.2f\n", explain.TotalCost)
+  fmt.Printf("○ Planning Time: %s\n", DurationToString(explain.PlanningTime))
+  fmt.Printf("○ Execution Time: %s\n", DurationToString(explain.ExecutionTime))
+  fmt.Println("┬")
 
-  PrintPlan(explain, &explain.Plan, 0)
+  PrintPlan(explain, &explain.Plan, "", 0, len(explain.Plan.Plans) == 1)
 }
 
-func PrintflnWithIndent(indent int) func(string, ...interface{}) (int, error) {
+func PrintflnWithPrefix(prefix string) func(string, ...interface{}) (int, error) {
   return func(format string, a... interface{}) (int, error) {
-    return fmt.Printf(fmt.Sprintf("%s%s\n", strings.Repeat("\t", indent), format), a...)
+    return fmt.Printf(fmt.Sprintf("%s%s\n", prefix, format), a...)
   }
 }
 
-func PrintPlan(explain * Explain, plan * Plan, indent int) {
+func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChild bool) {
   TagFormat := color.New(color.FgWhite, color.BgRed).SprintFunc()
   MutedFormat := color.New(color.FgHiBlack).SprintFunc()
   BoldFormat := color.New(color.FgHiWhite).SprintFunc()
+  // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
 
-  fmt.Println()
+  ParentOut := PrintflnWithPrefix(prefix)
 
-  Out := PrintflnWithIndent(indent)
+  ParentOut("│")
 
-  Out("-[ %v ]-", BoldFormat(plan.NodeType));
+  if len(plan.Plans) > 1 || lastChild {
+    prefix = prefix + "  "
+  } else {
+    prefix = prefix + "│ "
+  }
 
-  Out("  Duration: %v (%.0f%%)", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
+  var tags []string
 
-  Out("  Cost: %v (%.0f%%)", plan.ActualCost, (plan.ActualCost / explain.TotalCost) * 100)
+  if plan.Slowest {
+    tags = append(tags, TagFormat(" slowest "))
+  }
+  if plan.Costliest {
+    tags = append(tags, TagFormat(" costliest "))
+  }
+  if plan.Largest {
+    tags = append(tags, TagFormat(" largest "))
+  }
+  if plan.PlannerRowEstimateFactor >= 100 {
+    tags = append(tags, TagFormat(" bad estimate "))
+  }
 
-  Out("  Rows: %v", plan.ActualRows)
+  joint := "├"
+  if len(plan.Plans) > 1 || lastChild {
+    joint = "└"
+  }
+
+  ParentOut("%v─⌠ %v %v", joint, BoldFormat(plan.NodeType), strings.Join(tags, " "));
+
+  Out := PrintflnWithPrefix(prefix + "│ ")
+
+  Out("○ %v %v (%.0f%%)", "Duration:", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
+
+  Out("○ %v %v (%.0f%%)", "Cost:", plan.ActualCost, (plan.ActualCost / explain.TotalCost) * 100)
+
+  Out("○ %v %v", "Rows:", plan.ActualRows)
+
+  Out = PrintflnWithPrefix(prefix + "│   ")
 
   if plan.JoinType != "" {
     Out("%v %v", plan.JoinType, MutedFormat("join"));
@@ -246,30 +278,20 @@ func PrintPlan(explain * Explain, plan * Plan, indent int) {
   }
 
   if (plan.PlannerRowEstimateFactor != 0) {
-    Out("%vestimated rows by %.2fx", plan.PlannerRowEstimateDirection, plan.PlannerRowEstimateFactor)
+    Out("%v %vestimated %v %.2fx", MutedFormat("rows"), plan.PlannerRowEstimateDirection, MutedFormat("by"), plan.PlannerRowEstimateFactor)
   }
 
-  var tags []string
-
-  if plan.Slowest {
-    tags = append(tags, TagFormat(" slowest "))
-  }
-  if plan.Costliest {
-    tags = append(tags, TagFormat(" costliest "))
-  }
-  if plan.Largest {
-    tags = append(tags, TagFormat(" largest "))
-  }
-  if plan.PlannerRowEstimateFactor >= 100 {
-    tags = append(tags, TagFormat(" bad estimate "))
+  joint = "├"
+  if len(plan.Plans) == 0 {
+    joint = "⌡"
   }
 
-  if (len(tags) > 0) {
-    Out(strings.Join(tags, " "))
+  if len(plan.Output) > 0 {
+    fmt.Println(prefix + joint + "► " + strings.Join(plan.Output, " "))
   }
 
-  for _, child := range plan.Plans {
-    PrintPlan(explain, &child, indent + 1)
+  for index, child := range plan.Plans {
+    PrintPlan(explain, &child, prefix, depth + 1, index == len(plan.Plans) - 1)
   }
 }
 
