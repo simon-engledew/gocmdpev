@@ -11,6 +11,8 @@ import (
 	"log"
 	"os"
 	"strings"
+	"database/sql"
+	_ "github.com/lib/pq"
 )
 
 type EstimateDirection string
@@ -381,15 +383,33 @@ func Visualize(writer io.Writer, buffer []byte) error {
 }
 
 func main() {
-	buffer, err := ioutil.ReadAll(os.Stdin)
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: gocmdpev <POSTGRES_URL>")
+	}
+
+	db, err := sql.Open("postgres", os.Args[1])
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	query, err := ioutil.ReadAll(os.Stdin)
 
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
+	var queryPlan []byte
+
+	err = db.QueryRow(fmt.Sprintf("EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) %s", query)).Scan(&queryPlan)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// fmt.Println(string(buffer))
 
-	err = Visualize(os.Stdout, buffer)
+	err = Visualize(os.Stdout, queryPlan)
 
 	if err != nil {
 		log.Fatalf("%v", err)
