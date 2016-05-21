@@ -11,10 +11,14 @@ go get github.com/simon-engledew/gocmdpev
 
 Generate a query plan with all the trimmings by prefixing your query with:
 
-`EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)`
+```pgsql
+EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+```
 
 Then pipe the resulting query plan into `gocmdpev`.
 
 On MacOS you can just grab the query on your clipboard and run this one-liner:
 
-`pbpaste | sed 's/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | psql -qAt <DATABASE> | gocmdpev`
+```bash
+pbpaste | sed 's/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | psql -qAt <DATABASE> | gocmdpev
+```
