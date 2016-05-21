@@ -8,6 +8,7 @@ import (
   "os"
   "strings"
   "github.com/fatih/color"
+  // "github.com/nsf/termbox-go"
 )
 
 type Direction string
@@ -33,6 +34,23 @@ const (
   BitmapIndexScan = "Bitmap Index Scan"
   CTEScan = "CTE Scan"
 )
+
+var Descriptions = map[NodeType]string {
+   Limit: "Returns a specified number of rows from a record set.",
+   Sort: "Sorts a record set based on the specified sort key.",
+   NestedLoop: "Merges two record sets by looping through every record in the first set and trying to find a match in the second set. All matching records are returned.",
+   MergeJoin: "Merges two record sets by first sorting them on a *join key*.",
+   Hash: "Generates a hash table from the records in the input recordset. Hash is used by *Hash Join*.",
+   HashJoin: "Joins to record sets by hashing one of them (using a *Hash Scan*).",
+   Aggregate: "Groups records together based on a GROUP BY or aggregate function (like _sum()_).",
+   Hashaggregate: "Groups records together based on a GROUP BY or aggregate function (like sum()). Hash Aggregate uses a hash to first organize the records by a key.",
+   SequenceScan: "Finds relevant records by sequentially scanning the input record set. When reading from a table, Seq Scans (unlike Index Scans) perform a single read operation (only the table is read).",
+   IndexScan: "Finds relevant records based on an *Index*. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table.",
+   IndexOnlyScan: "Finds relevant records based on an *Index*. Index Only Scans perform a single read operation from the index and do not read from the corresponding table.",
+   BitmapHeapScan: "Searches through the pages returned by the *Bitmap Index Scan* for relevant rows.",
+   BitmapIndexScan: "Uses a *Bitmap Index* (index which uses 1 bit per page) to find all relevant pages. Results of this node are fed to the *Bitmap Heap Scan*.",
+   CTEScan: "Performs a sequential scan of *Common Table Expression (CTE) query* results. Note that results of a CTE are materialized (calculated and temporarily stored).",
+}
 
 type Explain struct {
   Plan Plan `json:"Plan"`
@@ -91,6 +109,15 @@ type Plan struct {
   Slowest bool
   Plans []Plan `json:"Plans"`
 }
+
+var PrefixFormat = color.New(color.FgHiBlack).SprintFunc()
+var TagFormat = color.New(color.FgWhite, color.BgRed).SprintFunc()
+var MutedFormat = color.New(color.FgHiBlack).SprintFunc()
+var BoldFormat = color.New(color.FgHiWhite).SprintFunc()
+var GoodFormat = color.New(color.FgGreen).SprintFunc()
+var WarningFormat = color.New(color.FgHiYellow).SprintFunc()
+var CriticalFormat = color.New(color.FgHiRed).SprintFunc()
+  // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
 
 func calculatePlannerEstimate(explain * Explain, plan * Plan) {
   plan.PlannerRowEstimateFactor = 0
@@ -158,15 +185,15 @@ func calculateMaximums(explain * Explain, plan * Plan) {
 
 func DurationToString(value float64) (string) {
   if value < 1 {
-    return color.GreenString("<1 ms");
+    return GoodFormat("<1 ms");
   } else if value > 1 && value < 1000 {
-    return color.GreenString(fmt.Sprintf("%.2f ms", value))
+    return GoodFormat(fmt.Sprintf("%.2f ms", value))
   } else if value > 200 && value < 1000 {
-    return color.YellowString(fmt.Sprintf("%.2f ms", value))
+    return WarningFormat(fmt.Sprintf("%.2f ms", value))
   } else if value >= 1000 && value < 60000 {
-    return color.RedString(fmt.Sprintf("%.2f s", value / 2000.0))
+    return CriticalFormat(fmt.Sprintf("%.2f s", value / 2000.0))
   } else if value >= 60000 {
-    return color.RedString(fmt.Sprintf("%.2f m", value / 60000.0))
+    return CriticalFormat(fmt.Sprintf("%.2f m", value / 60000.0))
   }
   return fmt.Sprintf("%f", value)
 }
@@ -190,26 +217,21 @@ func PrintExplain(explain * Explain) {
   fmt.Printf("○ Total Cost: %.2f\n", explain.TotalCost)
   fmt.Printf("○ Planning Time: %s\n", DurationToString(explain.PlanningTime))
   fmt.Printf("○ Execution Time: %s\n", DurationToString(explain.ExecutionTime))
-  fmt.Println("┬")
+  fmt.Println(PrefixFormat("┬"))
 
   PrintPlan(explain, &explain.Plan, "", 0, len(explain.Plan.Plans) == 1)
 }
 
 func PrintflnWithPrefix(prefix string) func(string, ...interface{}) (int, error) {
   return func(format string, a... interface{}) (int, error) {
-    return fmt.Printf(fmt.Sprintf("%s%s\n", prefix, format), a...)
+    return fmt.Printf(fmt.Sprintf("%s%s\n", PrefixFormat(prefix), format), a...)
   }
 }
 
 func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChild bool) {
-  TagFormat := color.New(color.FgWhite, color.BgRed).SprintFunc()
-  MutedFormat := color.New(color.FgHiBlack).SprintFunc()
-  BoldFormat := color.New(color.FgHiWhite).SprintFunc()
-  // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
-
   ParentOut := PrintflnWithPrefix(prefix)
 
-  ParentOut("│")
+  ParentOut(PrefixFormat("│"))
 
   if len(plan.Plans) > 1 || lastChild {
     prefix = prefix + "  "
@@ -237,9 +259,11 @@ func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChi
     joint = "└"
   }
 
-  ParentOut("%v─⌠ %v %v", joint, BoldFormat(plan.NodeType), strings.Join(tags, " "));
+  ParentOut("%v %v %v", PrefixFormat(joint + "─⌠"), BoldFormat(plan.NodeType), strings.Join(tags, " "));
 
-  Out := PrintflnWithPrefix(prefix + "│ ")
+  Out := PrintflnWithPrefix(prefix + PrefixFormat("│ "))
+
+  Out("%v", MutedFormat(Descriptions[plan.NodeType]))
 
   Out("○ %v %v (%.0f%%)", "Duration:", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
 
@@ -247,7 +271,7 @@ func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChi
 
   Out("○ %v %v", "Rows:", plan.ActualRows)
 
-  Out = PrintflnWithPrefix(prefix + "│   ")
+  Out = PrintflnWithPrefix(prefix + PrefixFormat("│   "))
 
   if plan.JoinType != "" {
     Out("%v %v", plan.JoinType, MutedFormat("join"));
@@ -287,7 +311,7 @@ func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChi
   }
 
   if len(plan.Output) > 0 {
-    fmt.Println(prefix + joint + "► " + strings.Join(plan.Output, " "))
+    fmt.Println(PrefixFormat(prefix + joint + "► ") + strings.Join(plan.Output, " "))
   }
 
   for index, child := range plan.Plans {
@@ -311,6 +335,16 @@ func main() {
   if err != nil {
     log.Fatalf("%v", err)
   }
+
+  // if err := termbox.Init(); err != nil {
+  //   panic(err)
+  // }
+
+  // w, h := termbox.Size()
+
+  // termbox.Close()
+
+  // fmt.Printf("%v %v", w, h)
 
   ProcessExplain(&explain[0])
   PrintExplain(&explain[0])
