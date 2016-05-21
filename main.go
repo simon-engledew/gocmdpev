@@ -1,12 +1,13 @@
 package main
 
 import (
-  "fmt"
-  "strings"
-  "log"
   "encoding/json"
+  "fmt"
   "io/ioutil"
+  "log"
   "os"
+  "strings"
+  "github.com/fatih/color"
 )
 
 type Direction string
@@ -53,14 +54,14 @@ type Plan struct {
   Alias string `json:"Alias"`
   Schema string `json:"Schema"`
   RelationName string `json:"Relation Name"`
-  RowsRemovedByIndexRecheck uint64 `json:"Rows Removed by Index Recheck"`
   ParentRelationship string `json:"Parent Relationship"`
   ScanDirection string `json:"Scan Direction"`
   CTEName string `json:"CTE Name"`
   JoinType string `json:"Join Type"`
   IndexName string `json:"Index Name"`
-  IndexCond string `json:"Index Cond"`
+  IndexCondition string `json:"Index Cond"`
   Filter string `json:"Filter"`
+  RowsRemovedByIndexRecheck uint64 `json:"Rows Removed by Index Recheck"`
   RowsRemovedByFilter uint64 `json:"Rows Removed by Filter"`
   HashCondition string `json:"Hash Cond"`
   HeapFetches uint64 `json:"Heap Fetches"`
@@ -157,15 +158,15 @@ func calculateMaximums(explain * Explain, plan * Plan) {
 
 func DurationToString(value float64) (string) {
   if value < 1 {
-    return "<1 ms";
+    return color.GreenString("<1 ms");
   } else if value > 1 && value < 1000 {
-    return fmt.Sprintf("%.2f ms", value)
+    return color.GreenString(fmt.Sprintf("%.2f ms", value))
   } else if value > 200 && value < 1000 {
-    return fmt.Sprintf("%.2f ms", value)
+    return color.YellowString(fmt.Sprintf("%.2f ms", value))
   } else if value >= 1000 && value < 60000 {
-    return fmt.Sprintf("%.2f s", value / 2000.0)
+    return color.RedString(fmt.Sprintf("%.2f s", value / 2000.0))
   } else if value >= 60000 {
-    return fmt.Sprintf("%.2f m", value / 60000.0)
+    return color.RedString(fmt.Sprintf("%.2f m", value / 60000.0))
   }
   return fmt.Sprintf("%f", value)
 }
@@ -193,37 +194,51 @@ func PrintExplain(explain * Explain) {
   PrintPlan(explain, &explain.Plan, 0)
 }
 
-func WithIndent(indent int) func(string, ...interface{}) (int, error) {
+func PrintflnWithIndent(indent int) func(string, ...interface{}) (int, error) {
   return func(format string, a... interface{}) (int, error) {
     return fmt.Printf(fmt.Sprintf("%s%s\n", strings.Repeat("\t", indent), format), a...)
   }
 }
 
 func PrintPlan(explain * Explain, plan * Plan, indent int) {
+  TagFormat := color.New(color.FgWhite, color.BgRed).SprintFunc()
+  MutedFormat := color.New(color.FgHiBlack).SprintFunc()
+  BoldFormat := color.New(color.FgHiWhite).SprintFunc()
+
   fmt.Println()
 
-  Out := WithIndent(indent)
+  Out := PrintflnWithIndent(indent)
 
-  Out("%v", plan.NodeType);
+  Out("-[ %v ]-", BoldFormat(plan.NodeType));
 
-  Out("%v", DurationToString(plan.ActualDuration))
+  Out("  Duration: %v (%.0f%%)", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
 
-  Out("%v (%.0f%%)", plan.ActualCost, (plan.ActualCost / explain.TotalCost) * 100)
+  Out("  Cost: %v (%.0f%%)", plan.ActualCost, (plan.ActualCost / explain.TotalCost) * 100)
+
+  Out("  Rows: %v", plan.ActualRows)
 
   if plan.JoinType != "" {
-    Out("%v join", plan.JoinType);
+    Out("%v %v", plan.JoinType, MutedFormat("join"));
   }
 
   if plan.RelationName != "" {
-    Out("on %v.%v", plan.Schema, plan.RelationName);
+    Out("%v %v.%v", MutedFormat("on"), plan.Schema, plan.RelationName);
   }
 
   if plan.IndexName != "" {
-    Out("using %v", plan.IndexName);
+    Out("%v %v", MutedFormat("using"), plan.IndexName);
+  }
+
+  if (plan.IndexCondition != "") {
+    Out("%v %v", MutedFormat("condition"), plan.IndexCondition);
+  }
+
+  if plan.Filter != "" {
+    Out("%v %v [-%v rows]", MutedFormat("filter"), plan.Filter, plan.RowsRemovedByFilter);
   }
 
   if (plan.HashCondition != "") {
-    Out("on %v", plan.HashCondition);
+    Out("%v %v", MutedFormat("on"), plan.HashCondition);
   }
 
   if plan.CTEName != "" {
@@ -231,22 +246,22 @@ func PrintPlan(explain * Explain, plan * Plan, indent int) {
   }
 
   if (plan.PlannerRowEstimateFactor != 0) {
-    Out("%v estimated rows by %.2fx", plan.PlannerRowEstimateDirection, plan.PlannerRowEstimateFactor)
+    Out("%vestimated rows by %.2fx", plan.PlannerRowEstimateDirection, plan.PlannerRowEstimateFactor)
   }
 
   var tags []string
 
   if plan.Slowest {
-    tags = append(tags, "slowest")
+    tags = append(tags, TagFormat(" slowest "))
   }
   if plan.Costliest {
-    tags = append(tags, "costliest")
+    tags = append(tags, TagFormat(" costliest "))
   }
   if plan.Largest {
-    tags = append(tags, "largest")
+    tags = append(tags, TagFormat(" largest "))
   }
   if plan.PlannerRowEstimateFactor >= 100 {
-    tags = append(tags, "bad estimate")
+    tags = append(tags, TagFormat(" bad estimate "))
   }
 
   if (len(tags) > 0) {
@@ -264,6 +279,8 @@ func main() {
   if err != nil {
     log.Fatalf("%v", err)
   }
+
+  // fmt.Println(string(bytes))
 
   var explain []Explain
 
