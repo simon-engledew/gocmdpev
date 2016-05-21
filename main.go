@@ -12,9 +12,9 @@ import (
   "github.com/mitchellh/go-wordwrap"
 )
 
-type Direction string
+type EstimateDirection string
 const (
-  Over Direction = "Over"
+  Over EstimateDirection = "Over"
   Under = "Under"
 )
 
@@ -100,7 +100,7 @@ type Plan struct {
   NodeType NodeType `json:"Node Type"`
   Output []string `json:"Output"`
   ParentRelationship string `json:"Parent Relationship"`
-  PlannerRowEstimateDirection Direction
+  PlannerRowEstimateDirection EstimateDirection
   PlannerRowEstimateFactor float64
   PlanRows uint64 `json:"Plan Rows"`
   PlanWidth uint64 `json:"Plan Width"`
