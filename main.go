@@ -9,7 +9,7 @@ import (
   "io"
   "strings"
   "github.com/fatih/color"
-  // "github.com/nsf/termbox-go"
+  "github.com/mitchellh/go-wordwrap"
 )
 
 type Direction string
@@ -36,21 +36,30 @@ const (
   CTEScan = "CTE Scan"
 )
 
+var PrefixFormat = color.New(color.FgHiBlack).SprintFunc()
+var TagFormat = color.New(color.FgWhite, color.BgRed).SprintFunc()
+var MutedFormat = color.New(color.FgHiBlack).SprintFunc()
+var BoldFormat = color.New(color.FgHiWhite).SprintFunc()
+var GoodFormat = color.New(color.FgGreen).SprintFunc()
+var WarningFormat = color.New(color.FgHiYellow).SprintFunc()
+var CriticalFormat = color.New(color.FgHiRed).SprintFunc()
+  // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
+
 var Descriptions = map[NodeType]string {
    Limit: "Returns a specified number of rows from a record set.",
    Sort: "Sorts a record set based on the specified sort key.",
    NestedLoop: "Merges two record sets by looping through every record in the first set and trying to find a match in the second set. All matching records are returned.",
-   MergeJoin: "Merges two record sets by first sorting them on a *join key*.",
-   Hash: "Generates a hash table from the records in the input recordset. Hash is used by *Hash Join*.",
-   HashJoin: "Joins to record sets by hashing one of them (using a *Hash Scan*).",
-   Aggregate: "Groups records together based on a GROUP BY or aggregate function (like _sum()_).",
-   Hashaggregate: "Groups records together based on a GROUP BY or aggregate function (like sum()). Hash Aggregate uses a hash to first organize the records by a key.",
+   MergeJoin: "Merges two record sets by first sorting them on a join key.",
+   Hash: "Generates a hash table from the records in the input recordset. Hash is used by Hash Join.",
+   HashJoin: "Joins to record sets by hashing one of them (using a Hash Scan).",
+   Aggregate: "Groups records together based on a GROUP BY or aggregate function (e.g. sum()).",
+   Hashaggregate: "Groups records together based on a GROUP BY or aggregate function (e.g. sum()). Hash Aggregate uses a hash to first organize the records by a key.",
    SequenceScan: "Finds relevant records by sequentially scanning the input record set. When reading from a table, Seq Scans (unlike Index Scans) perform a single read operation (only the table is read).",
-   IndexScan: "Finds relevant records based on an *Index*. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table.",
-   IndexOnlyScan: "Finds relevant records based on an *Index*. Index Only Scans perform a single read operation from the index and do not read from the corresponding table.",
-   BitmapHeapScan: "Searches through the pages returned by the *Bitmap Index Scan* for relevant rows.",
-   BitmapIndexScan: "Uses a *Bitmap Index* (index which uses 1 bit per page) to find all relevant pages. Results of this node are fed to the *Bitmap Heap Scan*.",
-   CTEScan: "Performs a sequential scan of *Common Table Expression (CTE) query* results. Note that results of a CTE are materialized (calculated and temporarily stored).",
+   IndexScan: "Finds relevant records based on an Index. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table.",
+   IndexOnlyScan: "Finds relevant records based on an Index. Index Only Scans perform a single read operation from the index and do not read from the corresponding table.",
+   BitmapHeapScan: "Searches through the pages returned by the Bitmap Index Scan for relevant rows.",
+   BitmapIndexScan: "Uses a Bitmap Index (index which uses 1 bit per page) to find all relevant pages. Results of this node are fed to the Bitmap Heap Scan.",
+   CTEScan: "Performs a sequential scan of Common Table Expression (CTE) query results. Note that results of a CTE are materialized (calculated and temporarily stored).",
 }
 
 type Explain struct {
@@ -65,60 +74,53 @@ type Explain struct {
 }
 
 type Plan struct {
-  NodeType NodeType `json:"Node Type"`
-  StartupCost float64 `json:"Startup Cost"`
-  TotalCost float64 `json:"Total Cost"`
-  PlanRows uint64 `json:"Plan Rows"`
-  PlanWidth uint64 `json:"Plan Width"`
-  Alias string `json:"Alias"`
-  Schema string `json:"Schema"`
-  RelationName string `json:"Relation Name"`
-  ParentRelationship string `json:"Parent Relationship"`
-  ScanDirection string `json:"Scan Direction"`
-  CTEName string `json:"CTE Name"`
-  JoinType string `json:"Join Type"`
-  IndexName string `json:"Index Name"`
-  IndexCondition string `json:"Index Cond"`
-  Filter string `json:"Filter"`
-  RowsRemovedByIndexRecheck uint64 `json:"Rows Removed by Index Recheck"`
-  RowsRemovedByFilter uint64 `json:"Rows Removed by Filter"`
-  HashCondition string `json:"Hash Cond"`
-  HeapFetches uint64 `json:"Heap Fetches"`
+  ActualCost float64
+  ActualDuration float64
+  ActualLoops uint64 `json:"Actual Loops"`
+  ActualRows uint64 `json:"Actual Rows"`
   ActualStartupTime float64 `json:"Actual Startup Time"`
   ActualTotalTime float64 `json:"Actual Total Time"`
-  ActualDuration float64
-  ActualCost float64
-  ActualRows uint64 `json:"Actual Rows"`
-  ActualLoops uint64 `json:"Actual Loops"`
-  Output []string `json:"Output"`
-  SharedHitBlocks uint64 `json:"Shared Hit Blocks"`
-  SharedReadBlocks uint64 `json:"Shared Read Blocks"`
-  SharedDirtiedBlocks uint64 `json:"Shared Dirtied Blocks"`
-  SharedWrittenBlocks uint64 `json:"Shared Written Blocks"`
-  LocalHitBlocks uint64 `json:"Local Hit Blocks"`
-  LocalReadBlocks uint64 `json:"Local Read Blocks"`
-  LocalDirtiedBlocks uint64 `json:"Local Dirtied Blocks"`
-  LocalWrittenBlocks uint64 `json:"Local Written Blocks"`
-  TempReadBlocks uint64 `json:"Temp Read Blocks"`
-  TempWrittenBlocks uint64 `json:"Temp Written Blocks"`
+  Alias string `json:"Alias"`
+  Costliest bool
+  CTEName string `json:"CTE Name"`
+  Filter string `json:"Filter"`
+  GroupKey []string `json:"Group Key"`
+  HashCondition string `json:"Hash Cond"`
+  HeapFetches uint64 `json:"Heap Fetches"`
+  IndexCondition string `json:"Index Cond"`
+  IndexName string `json:"Index Name"`
   IOReadTime float64 `json:"I/O Read Time"`
   IOWriteTime float64 `json:"I/O Write Time"`
-  PlannerRowEstimateFactor float64
-  PlannerRowEstimateDirection Direction
-  Costliest bool
+  JoinType string `json:"Join Type"`
   Largest bool
+  LocalDirtiedBlocks uint64 `json:"Local Dirtied Blocks"`
+  LocalHitBlocks uint64 `json:"Local Hit Blocks"`
+  LocalReadBlocks uint64 `json:"Local Read Blocks"`
+  LocalWrittenBlocks uint64 `json:"Local Written Blocks"`
+  NodeType NodeType `json:"Node Type"`
+  Output []string `json:"Output"`
+  ParentRelationship string `json:"Parent Relationship"`
+  PlannerRowEstimateDirection Direction
+  PlannerRowEstimateFactor float64
+  PlanRows uint64 `json:"Plan Rows"`
+  PlanWidth uint64 `json:"Plan Width"`
+  RelationName string `json:"Relation Name"`
+  RowsRemovedByFilter uint64 `json:"Rows Removed by Filter"`
+  RowsRemovedByIndexRecheck uint64 `json:"Rows Removed by Index Recheck"`
+  ScanDirection string `json:"Scan Direction"`
+  Schema string `json:"Schema"`
+  SharedDirtiedBlocks uint64 `json:"Shared Dirtied Blocks"`
+  SharedHitBlocks uint64 `json:"Shared Hit Blocks"`
+  SharedReadBlocks uint64 `json:"Shared Read Blocks"`
+  SharedWrittenBlocks uint64 `json:"Shared Written Blocks"`
   Slowest bool
+  StartupCost float64 `json:"Startup Cost"`
+  Strategy string `json:"Strategy"`
+  TempReadBlocks uint64 `json:"Temp Read Blocks"`
+  TempWrittenBlocks uint64 `json:"Temp Written Blocks"`
+  TotalCost float64 `json:"Total Cost"`
   Plans []Plan `json:"Plans"`
 }
-
-var PrefixFormat = color.New(color.FgHiBlack).SprintFunc()
-var TagFormat = color.New(color.FgWhite, color.BgRed).SprintFunc()
-var MutedFormat = color.New(color.FgHiBlack).SprintFunc()
-var BoldFormat = color.New(color.FgHiWhite).SprintFunc()
-var GoodFormat = color.New(color.FgGreen).SprintFunc()
-var WarningFormat = color.New(color.FgHiYellow).SprintFunc()
-var CriticalFormat = color.New(color.FgHiRed).SprintFunc()
-  // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
 
 func CalculatePlannerEstimate(explain * Explain, plan * Plan) {
   plan.PlannerRowEstimateFactor = 0
@@ -260,11 +262,24 @@ func WritePlan(writer io.Writer, explain * Explain, plan * Plan, prefix string, 
     joint = "└"
   }
 
-  ParentOut("%v %v %v", PrefixFormat(joint + "─⌠"), BoldFormat(plan.NodeType), strings.Join(tags, " "));
+  direction := ""
+  if (plan.ScanDirection != "") {
+    direction = MutedFormat(fmt.Sprintf("%v ", plan.ScanDirection))
+  }
+
+  strategy := ""
+
+  if (plan.Strategy != "") {
+    strategy = fmt.Sprintf(" (%v)", plan.Strategy)
+  }
+
+  ParentOut("%v %v%v%v %v", PrefixFormat(joint + "─⌠"), direction, BoldFormat(plan.NodeType), strategy, strings.Join(tags, " "));
 
   Out := WriteWithPrefix(writer, prefix + PrefixFormat("│ "))
 
-  Out("%v", MutedFormat(Descriptions[plan.NodeType]))
+  for _, line := range strings.Split(wordwrap.WrapString(Descriptions[plan.NodeType], 60), "\n") {
+    Out("%v", MutedFormat(line))
+  }
 
   Out("○ %v %v (%.0f%%)", "Duration:", DurationToString(plan.ActualDuration), (plan.ActualDuration / explain.ExecutionTime) * 100)
 
@@ -351,14 +366,4 @@ func main() {
   if err != nil {
     log.Fatalf("%v", err)
   }
-
-  // if err := termbox.Init(); err != nil {
-  //   panic(err)
-  // }
-
-  // w, h := termbox.Size()
-
-  // termbox.Close()
-
-  // fmt.Printf("%v %v", w, h)
 }
