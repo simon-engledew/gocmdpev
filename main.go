@@ -6,6 +6,7 @@ import (
   "io/ioutil"
   "log"
   "os"
+  "io"
   "strings"
   "github.com/fatih/color"
   // "github.com/nsf/termbox-go"
@@ -119,7 +120,7 @@ var WarningFormat = color.New(color.FgHiYellow).SprintFunc()
 var CriticalFormat = color.New(color.FgHiRed).SprintFunc()
   // LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
 
-func calculatePlannerEstimate(explain * Explain, plan * Plan) {
+func CalculatePlannerEstimate(explain * Explain, plan * Plan) {
   plan.PlannerRowEstimateFactor = 0
   plan.PlannerRowEstimateDirection = Under;
   if plan.PlanRows != 0 {
@@ -135,7 +136,7 @@ func calculatePlannerEstimate(explain * Explain, plan * Plan) {
   }
 }
 
-func calculateActuals(explain * Explain, plan * Plan) {
+func CalculateActuals(explain * Explain, plan * Plan) {
   plan.ActualDuration = plan.ActualTotalTime
   plan.ActualCost = plan.TotalCost
 
@@ -155,7 +156,7 @@ func calculateActuals(explain * Explain, plan * Plan) {
   plan.ActualDuration = plan.ActualDuration * float64(plan.ActualLoops)
 }
 
-func findOutlierNodes(explain * Explain, plan * Plan) {
+func CalculateOutlierNodes(explain * Explain, plan * Plan) {
   if plan.ActualCost == explain.MaxCost {
     plan.Costliest = true
   }
@@ -167,11 +168,11 @@ func findOutlierNodes(explain * Explain, plan * Plan) {
   }
 
   for index, _ := range plan.Plans {
-    findOutlierNodes(explain, &plan.Plans[index])
+    CalculateOutlierNodes(explain, &plan.Plans[index])
   }
 }
 
-func calculateMaximums(explain * Explain, plan * Plan) {
+func CalculateMaximums(explain * Explain, plan * Plan) {
   if explain.MaxRows < plan.ActualRows {
     explain.MaxRows = plan.ActualRows
   }
@@ -200,36 +201,36 @@ func DurationToString(value float64) (string) {
 
 func ProcessExplain(explain * Explain) {
   ProcessPlan(explain, &explain.Plan)
-  findOutlierNodes(explain, &explain.Plan)
+  CalculateOutlierNodes(explain, &explain.Plan)
 }
 
 func ProcessPlan(explain * Explain, plan * Plan) {
-  calculatePlannerEstimate(explain, plan)
-  calculateActuals(explain, plan)
-  calculateMaximums(explain, plan)
+  CalculatePlannerEstimate(explain, plan)
+  CalculateActuals(explain, plan)
+  CalculateMaximums(explain, plan)
 
   for index, _ := range plan.Plans {
     ProcessPlan(explain, &plan.Plans[index])
   }
 }
 
-func PrintExplain(explain * Explain) {
-  fmt.Printf("○ Total Cost: %.2f\n", explain.TotalCost)
-  fmt.Printf("○ Planning Time: %s\n", DurationToString(explain.PlanningTime))
-  fmt.Printf("○ Execution Time: %s\n", DurationToString(explain.ExecutionTime))
-  fmt.Println(PrefixFormat("┬"))
+func WriteExplain(writer io.Writer, explain * Explain) {
+  fmt.Fprintf(writer, "○ Total Cost: %.2f\n", explain.TotalCost)
+  fmt.Fprintf(writer, "○ Planning Time: %s\n", DurationToString(explain.PlanningTime))
+  fmt.Fprintf(writer, "○ Execution Time: %s\n", DurationToString(explain.ExecutionTime))
+  fmt.Fprintf(writer, PrefixFormat("┬\n"))
 
-  PrintPlan(explain, &explain.Plan, "", 0, len(explain.Plan.Plans) == 1)
+  WritePlan(writer, explain, &explain.Plan, "", 0, len(explain.Plan.Plans) == 1)
 }
 
-func PrintflnWithPrefix(prefix string) func(string, ...interface{}) (int, error) {
+func WriteWithPrefix(writer io.Writer, prefix string) func(string, ...interface{}) (int, error) {
   return func(format string, a... interface{}) (int, error) {
-    return fmt.Printf(fmt.Sprintf("%s%s\n", PrefixFormat(prefix), format), a...)
+    return fmt.Fprintf(writer, fmt.Sprintf("%s%s\n", PrefixFormat(prefix), format), a...)
   }
 }
 
-func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChild bool) {
-  ParentOut := PrintflnWithPrefix(prefix)
+func WritePlan(writer io.Writer, explain * Explain, plan * Plan, prefix string, depth int, lastChild bool) {
+  ParentOut := WriteWithPrefix(writer, prefix)
 
   ParentOut(PrefixFormat("│"))
 
@@ -261,7 +262,7 @@ func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChi
 
   ParentOut("%v %v %v", PrefixFormat(joint + "─⌠"), BoldFormat(plan.NodeType), strings.Join(tags, " "));
 
-  Out := PrintflnWithPrefix(prefix + PrefixFormat("│ "))
+  Out := WriteWithPrefix(writer, prefix + PrefixFormat("│ "))
 
   Out("%v", MutedFormat(Descriptions[plan.NodeType]))
 
@@ -271,7 +272,7 @@ func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChi
 
   Out("○ %v %v", "Rows:", plan.ActualRows)
 
-  Out = PrintflnWithPrefix(prefix + PrefixFormat("│   "))
+  Out = WriteWithPrefix(writer, prefix + PrefixFormat("│   "))
 
   if plan.JoinType != "" {
     Out("%v %v", plan.JoinType, MutedFormat("join"));
@@ -311,26 +312,41 @@ func PrintPlan(explain * Explain, plan * Plan, prefix string, depth int, lastChi
   }
 
   if len(plan.Output) > 0 {
-    fmt.Println(PrefixFormat(prefix + joint + "► ") + strings.Join(plan.Output, " "))
+    fmt.Fprintln(writer, PrefixFormat(prefix + joint + "► ") + strings.Join(plan.Output, " "))
   }
 
-  for index, child := range plan.Plans {
-    PrintPlan(explain, &child, prefix, depth + 1, index == len(plan.Plans) - 1)
+  for index, _ := range plan.Plans {
+    WritePlan(writer, explain, &plan.Plans[index], prefix, depth + 1, index == len(plan.Plans) - 1)
   }
 }
 
+func Visualize(writer io.Writer, buffer []byte) (error) {
+  var explain []Explain
+
+  err := json.Unmarshal(buffer, &explain)
+
+  if err != nil {
+    return err
+  }
+
+  for index, _ := range explain {
+    ProcessExplain(&explain[index])
+    WriteExplain(writer, &explain[index])
+  }
+
+  return nil
+}
+
 func main() {
-  bytes, err := ioutil.ReadAll(os.Stdin)
+  buffer, err := ioutil.ReadAll(os.Stdin)
 
   if err != nil {
     log.Fatalf("%v", err)
   }
 
-  // fmt.Println(string(bytes))
+  // fmt.Println(string(buffer))
 
-  var explain []Explain
-
-  err = json.Unmarshal(bytes, &explain)
+  err = Visualize(os.Stdout, buffer)
 
   if err != nil {
     log.Fatalf("%v", err)
@@ -345,7 +361,4 @@ func main() {
   // termbox.Close()
 
   // fmt.Printf("%v %v", w, h)
-
-  ProcessExplain(&explain[0])
-  PrintExplain(&explain[0])
 }
