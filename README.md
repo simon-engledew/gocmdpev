@@ -22,3 +22,11 @@ On MacOS you can just grab a query on your clipboard and run this one-liner:
 ```bash
 pbpaste | sed 's/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | psql -qAt <DATABASE> | gocmdpev
 ```
+
+## Python 3 Bindings
+
+Build:
+
+```
+go build -buildmode=c-shared -o pycmdpev.so
+```
