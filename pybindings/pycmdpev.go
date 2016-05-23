@@ -13,13 +13,13 @@ int PyArg_ParseTuple_s(PyObject * args, const char **a) {
     return PyArg_ParseTuple(args, "s", a);
 }
 
-static PyMethodDef Methods[] = {
-    {"visualize", visualize, METH_VARARGS, "Visualise a JSON explain"},
+static PyMethodDef methods[] = {
+    { "visualize", visualize, METH_VARARGS, "Visualise a JSON explain" },
     { NULL, NULL, 0, NULL }
 };
 
 static struct PyModuleDef module = {
-   PyModuleDef_HEAD_INIT, "pycmdpev", NULL, -1, Methods
+   PyModuleDef_HEAD_INIT, "pycmdpev", NULL, -1, methods
 };
 
 PyMODINIT_FUNC
@@ -42,3 +42,5 @@ func ArgsString(args *C.PyObject) (string, error) {
 
   return C.GoString(a), nil
 }
+
+func main() {}

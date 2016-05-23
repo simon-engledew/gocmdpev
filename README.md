@@ -28,9 +28,8 @@ pbpaste | sed 's/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | 
 Build:
 
 ```bash
-go build -buildmode=c-shared -o pycmdpev.so
+go build -buildmode=c-shared -o pycmdpev.so pybindings/*
 ```
-
 
 ```python
 import pycmdpev
