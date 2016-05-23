@@ -34,13 +34,13 @@ import "C"
 import "errors"
 
 func ArgsString(args *C.PyObject) (string, error) {
-  var a * C.char
+	var a *C.char
 
-  if C.PyArg_ParseTuple_s(args, &a) == 0 {
-      return "", errors.New("ArgumentError")
-  }
+	if C.PyArg_ParseTuple_s(args, &a) == 0 {
+		return "", errors.New("ArgumentError")
+	}
 
-  return C.GoString(a), nil
+	return C.GoString(a), nil
 }
 
 func main() {}
