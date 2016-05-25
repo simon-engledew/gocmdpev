@@ -4,6 +4,7 @@ package main
 import (
   "./gopev"
   "io/ioutil"
+  "github.com/fatih/color"
   "log"
   "os"
 )
@@ -17,7 +18,7 @@ func main() {
 
   // fmt.Println(string(buffer))
 
-  err = gopev.Visualize(os.Stdout, buffer)
+  err = gopev.Visualize(color.Output, buffer)
 
   if err != nil {
     log.Fatalf("%v", err)
