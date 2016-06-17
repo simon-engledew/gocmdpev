@@ -2,7 +2,7 @@ package main
 
 
 import (
-  "./gopev"
+  "github.com/simon-engledew/gocmdpev/gopev"
   "io/ioutil"
   "github.com/fatih/color"
   "log"
