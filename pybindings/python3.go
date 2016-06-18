@@ -1,6 +1,6 @@
 package main
 
-import "../gopev"
+import "github.com/simon-engledew/gocmdpev/gopev"
 
 /*
 #cgo pkg-config: python3
