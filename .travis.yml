@@ -7,11 +7,12 @@ before_install:
 - go get github.com/mitchellh/gox
 install:
 - go get -d -v ./...
-- gox
+- gox -output 'releases/{{.Dir}}_{{.OS}}_{{.Arch}}'
 deploy:
   provider: releases
   api_key:
     secure: rfdHjCmQA/udtYSdy5BVRITqSFF0JqKmKMte7tikht2Ot15UxC4noBz8+Tjz1e8DfbrBUZm7Yyy/m4dRDQ4vBqmmXb74BwRZQMevT7a26Hl+abHonz2ANDrCwW6S0W50dmk5oAstkuPpSPNoxPqomOy7wDmmoOqj+R6xsBEB/hh5CRDVbX2MkY01TytUz+qU9UDYqfjmO+2Z66USlmH7lHT0wUdKDgMMz5gYvCLojSyCAxcevgk9jWMp8AqC3RJL89MhNkB+O62Ld6S4lUJbv7gqT/0WAeVp8e7B7JrJ0IdCszcvDhjQgOXJwP/a1A1bXt8FVQnHmkywyBYkFYR+VcDOFkcD5hAy/9RRQ8/PKfgLZi7ORTP5qA1Oes8x6cbgWUSWm+hDMpoekbB1WJztoeSrTKlEKbau4JsrPudb0uh5UKxdlnmUDkskQHdyvXQj/ug4guPlQEMWaDCLVFfwvncdrm5I8mLXDASDYT/oRULe7R+8nfkO2FZtOA1ggE6RGGs6cvLNfTX2wW4dEA+DeuaR6f6/fhAu4kOQrR1tZUWLyIARz3O9eSQ95lV+VyBHnPQ9ardhQCQm5GTC9k3o5SNVvFQQ1G1pEZGdIGh7I+YUPKsuZvdTLPmQLhHtCotGdxbgWzq1hblr/8s3Gsie1av4ueh9Y/MBeWLceVGgABE=
-  file: "gocmdpev*"
+  file_glob: true
+  file: 'releases/*'
   on:
     repo: simon-engledew/gocmdpev
