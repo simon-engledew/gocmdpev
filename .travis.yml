@@ -4,9 +4,6 @@ go:
 before_install:
 - sudo apt-get -qq update
 - sudo apt-get install -y python3-dev
-install:
-- go get -d -v ./...
-- go build -o gocmdpev main.go
 deploy:
   provider: releases
   api_key:
