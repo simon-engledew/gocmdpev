@@ -9,6 +9,13 @@ A command-line GO Postgres query visualizer, heavily inspired by the excellent (
 go get github.com/simon-engledew/gocmdpev
 ```
 
+or via Homebrew:
+
+```
+brew tap simon-engledew/gocmdpev
+brew install gocmdpev
+```
+
 Generate a query plan with all the trimmings by prefixing your query with:
 
 ```pgsql
