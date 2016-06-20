@@ -3,17 +3,21 @@ package main
 import (
   "github.com/simon-engledew/gocmdpev/gopev"
   "gopkg.in/alecthomas/kingpin.v2"
-  "io/ioutil"
   "github.com/fatih/color"
+  "io/ioutil"
   "log"
   "os"
 )
 
+var (
+  app = kingpin.New("gocmdpev", "A command-line GO Postgres query visualizer (see https://github.com/simon-engledew/gocmdpev).")
+)
+
 func main() {
-  kingpin.CommandLine.HelpFlag.Short('h')
-  kingpin.CommandLine.Version("1.0.0")
-  kingpin.CommandLine.VersionFlag.Short('v')
-  kingpin.Parse()
+  app.HelpFlag.Short('h')
+  app.Version("1.0.0")
+  app.VersionFlag.Short('v')
+  app.Parse(os.Args[1:])
 
   buffer, err := ioutil.ReadAll(os.Stdin)
 
