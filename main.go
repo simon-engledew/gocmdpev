@@ -15,7 +15,7 @@ var (
 
 func main() {
   app.HelpFlag.Short('h')
-  app.Version("1.0.0")
+  app.Version("1.0.1")
   app.VersionFlag.Short('v')
   app.Parse(os.Args[1:])
 
