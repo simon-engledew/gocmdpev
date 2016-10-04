@@ -43,3 +43,7 @@ import pycmdpev
 
 pycmdpev.visualize("<JSON EXPLAIN STRING>")
 ```
+
+## Using with Ruby on Rails
+
+Try the [`pg-eyeballs`](https://github.com/bradurani/pg-eyeballs) gem
