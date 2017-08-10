@@ -1,6 +1,12 @@
 package main
 
-import "github.com/simon-engledew/gocmdpev/gopev"
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/simon-engledew/gocmdpev/pev"
+)
 
 /*
 #cgo pkg-config: python3
@@ -8,11 +14,6 @@ import "github.com/simon-engledew/gocmdpev/gopev"
 #include <Python.h>
 */
 import "C"
-
-import (
-	"fmt"
-	"os"
-)
 
 //export visualize
 func visualize(self, args *C.PyObject) *C.PyObject {
@@ -22,7 +23,7 @@ func visualize(self, args *C.PyObject) *C.PyObject {
 		return nil
 	}
 
-	err = gopev.Visualize(os.Stdout, []byte(input))
+	err = pev.Visualize(os.Stdout, strings.NewReader(input))
 
 	if err != nil {
 		C.PyErr_SetString(C.PyExc_RuntimeError, C.CString(fmt.Sprintf("%v", err)))

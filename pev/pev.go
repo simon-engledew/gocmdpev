@@ -1,13 +1,14 @@
-package gopev
+package pev
 
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	"github.com/mitchellh/go-wordwrap"
-	"io"
-	"strings"
 )
 
 type EstimateDirection string
@@ -37,16 +38,14 @@ const (
 	CTEScan                  = "CTE Scan"
 )
 
-var PrefixFormat = color.New(color.FgHiBlack).SprintFunc()
-var TagFormat = color.New(color.FgWhite, color.BgRed).SprintFunc()
-var MutedFormat = color.New(color.FgHiBlack).SprintFunc()
-var BoldFormat = color.New(color.FgHiWhite).SprintFunc()
-var GoodFormat = color.New(color.FgGreen).SprintFunc()
-var WarningFormat = color.New(color.FgHiYellow).SprintFunc()
-var CriticalFormat = color.New(color.FgHiRed).SprintFunc()
-var OutputFormat = color.New(color.FgCyan).SprintFunc()
-
-// LabelFormat := color.New(color.FgWhite, color.BgBlue).SprintfFunc()
+var prefixFormat = color.New(color.FgHiBlack).SprintFunc()
+var tagFormat = color.New(color.FgWhite, color.BgRed).SprintFunc()
+var mutedFormat = color.New(color.FgHiBlack).SprintFunc()
+var boldFormat = color.New(color.FgHiWhite).SprintFunc()
+var goodFormat = color.New(color.FgGreen).SprintFunc()
+var warningFormat = color.New(color.FgHiYellow).SprintFunc()
+var criticalFormat = color.New(color.FgHiRed).SprintFunc()
+var outputFormat = color.New(color.FgCyan).SprintFunc()
 
 var Descriptions = map[NodeType]string{
 	Append:          "Used in a UNION to merge multiple record sets by appending them together.",
@@ -126,7 +125,7 @@ type Plan struct {
 	Plans                       []Plan  `json:"Plans"`
 }
 
-func CalculatePlannerEstimate(explain *Explain, plan *Plan) {
+func calculatePlannerEstimate(explain *Explain, plan *Plan) {
 	plan.PlannerRowEstimateFactor = 0
 	plan.PlannerRowEstimateDirection = Under
 	if plan.PlanRows != 0 {
@@ -142,7 +141,7 @@ func CalculatePlannerEstimate(explain *Explain, plan *Plan) {
 	}
 }
 
-func CalculateActuals(explain *Explain, plan *Plan) {
+func calculateActuals(explain *Explain, plan *Plan) {
 	plan.ActualDuration = plan.ActualTotalTime
 	plan.ActualCost = plan.TotalCost
 
@@ -162,17 +161,17 @@ func CalculateActuals(explain *Explain, plan *Plan) {
 	plan.ActualDuration = plan.ActualDuration * float64(plan.ActualLoops)
 }
 
-func CalculateOutlierNodes(explain *Explain, plan *Plan) {
+func calculateOutlierNodes(explain *Explain, plan *Plan) {
 	plan.Costliest = plan.ActualCost == explain.MaxCost
 	plan.Largest = plan.ActualRows == explain.MaxRows
 	plan.Slowest = plan.ActualDuration == explain.MaxDuration
 
-	for index, _ := range plan.Plans {
-		CalculateOutlierNodes(explain, &plan.Plans[index])
+	for index := range plan.Plans {
+		calculateOutlierNodes(explain, &plan.Plans[index])
 	}
 }
 
-func CalculateMaximums(explain *Explain, plan *Plan) {
+func calculateMaximums(explain *Explain, plan *Plan) {
 	if explain.MaxRows < plan.ActualRows {
 		explain.MaxRows = plan.ActualRows
 	}
@@ -184,45 +183,45 @@ func CalculateMaximums(explain *Explain, plan *Plan) {
 	}
 }
 
-func DurationToString(value float64) string {
+func durationToString(value float64) string {
 	if value < 1 {
-		return GoodFormat("<1 ms")
+		return goodFormat("<1 ms")
 	} else if value < 100 {
-		return GoodFormat(fmt.Sprintf("%.2f ms", value))
+		return goodFormat(fmt.Sprintf("%.2f ms", value))
 	} else if value < 1000 {
-		return WarningFormat(fmt.Sprintf("%.2f ms", value))
+		return warningFormat(fmt.Sprintf("%.2f ms", value))
 	} else if value < 60000 {
-		return CriticalFormat(fmt.Sprintf("%.2f s", value/2000.0))
+		return criticalFormat(fmt.Sprintf("%.2f s", value/2000.0))
 	} else {
-		return CriticalFormat(fmt.Sprintf("%.2f m", value/60000.0))
+		return criticalFormat(fmt.Sprintf("%.2f m", value/60000.0))
 	}
 }
 
-func ProcessExplain(explain *Explain) {
-	ProcessPlan(explain, &explain.Plan)
-	CalculateOutlierNodes(explain, &explain.Plan)
+func processExplain(explain *Explain) {
+	processPlan(explain, &explain.Plan)
+	calculateOutlierNodes(explain, &explain.Plan)
 }
 
-func ProcessPlan(explain *Explain, plan *Plan) {
-	CalculatePlannerEstimate(explain, plan)
-	CalculateActuals(explain, plan)
-	CalculateMaximums(explain, plan)
+func processPlan(explain *Explain, plan *Plan) {
+	calculatePlannerEstimate(explain, plan)
+	calculateActuals(explain, plan)
+	calculateMaximums(explain, plan)
 
-	for index, _ := range plan.Plans {
-		ProcessPlan(explain, &plan.Plans[index])
+	for index := range plan.Plans {
+		processPlan(explain, &plan.Plans[index])
 	}
 }
 
-func WriteExplain(writer io.Writer, explain *Explain) {
+func writeExplain(writer io.Writer, explain *Explain) {
 	fmt.Fprintf(writer, "○ Total Cost: %s\n", humanize.Commaf(explain.TotalCost))
-	fmt.Fprintf(writer, "○ Planning Time: %s\n", DurationToString(explain.PlanningTime))
-	fmt.Fprintf(writer, "○ Execution Time: %s\n", DurationToString(explain.ExecutionTime))
-	fmt.Fprintf(writer, PrefixFormat("┬\n"))
+	fmt.Fprintf(writer, "○ Planning Time: %s\n", durationToString(explain.PlanningTime))
+	fmt.Fprintf(writer, "○ Execution Time: %s\n", durationToString(explain.ExecutionTime))
+	fmt.Fprintf(writer, prefixFormat("┬\n"))
 
-	WritePlan(writer, explain, &explain.Plan, "", 0, len(explain.Plan.Plans) == 1)
+	writePlan(writer, explain, &explain.Plan, "", 0, len(explain.Plan.Plans) == 1)
 }
 
-func FormatDetails(plan *Plan) string {
+func formatDetails(plan *Plan) string {
 	var details []string
 
 	if plan.ScanDirection != "" {
@@ -234,36 +233,36 @@ func FormatDetails(plan *Plan) string {
 	}
 
 	if len(details) > 0 {
-		return MutedFormat(fmt.Sprintf(" [%v]", strings.Join(details, ", ")))
+		return mutedFormat(fmt.Sprintf(" [%v]", strings.Join(details, ", ")))
 	}
 
 	return ""
 }
 
-func FormatTag(tag string) string {
-	return TagFormat(fmt.Sprintf(" %v ", tag))
+func formatTag(tag string) string {
+	return tagFormat(fmt.Sprintf(" %v ", tag))
 }
 
-func FormatTags(plan *Plan) string {
+func formatTags(plan *Plan) string {
 	var tags []string
 
 	if plan.Slowest {
-		tags = append(tags, FormatTag("slowest"))
+		tags = append(tags, formatTag("slowest"))
 	}
 	if plan.Costliest {
-		tags = append(tags, FormatTag("costliest"))
+		tags = append(tags, formatTag("costliest"))
 	}
 	if plan.Largest {
-		tags = append(tags, FormatTag("largest"))
+		tags = append(tags, formatTag("largest"))
 	}
 	if plan.PlannerRowEstimateFactor >= 100 {
-		tags = append(tags, FormatTag("bad estimate"))
+		tags = append(tags, formatTag("bad estimate"))
 	}
 
 	return strings.Join(tags, " ")
 }
 
-func GetTerminator(index int, plan *Plan) string {
+func getTerminator(index int, plan *Plan) string {
 	if index == 0 {
 		if len(plan.Plans) == 0 {
 			return "⌡► "
@@ -279,21 +278,21 @@ func GetTerminator(index int, plan *Plan) string {
 	}
 }
 
-func WritePlan(writer io.Writer, explain *Explain, plan *Plan, prefix string, depth int, lastChild bool) {
+func writePlan(writer io.Writer, explain *Explain, plan *Plan, prefix string, depth int, lastChild bool) {
 	currentPrefix := prefix
 
-	var Output = func(format string, a ...interface{}) (int, error) {
-		return fmt.Fprintf(writer, fmt.Sprintf("%s%s\n", PrefixFormat(currentPrefix), format), a...)
+	var outputFn = func(format string, a ...interface{}) (int, error) {
+		return fmt.Fprintf(writer, fmt.Sprintf("%s%s\n", prefixFormat(currentPrefix), format), a...)
 	}
 
-	Output(PrefixFormat("│"))
+	outputFn(prefixFormat("│"))
 
 	joint := "├"
 	if len(plan.Plans) > 1 || lastChild {
 		joint = "└"
 	}
 
-	Output("%v %v%v %v", PrefixFormat(joint+"─⌠"), BoldFormat(plan.NodeType), FormatDetails(plan), FormatTags(plan))
+	outputFn("%v %v%v %v", prefixFormat(joint+"─⌠"), boldFormat(plan.NodeType), formatDetails(plan), formatTags(plan))
 
 	if len(plan.Plans) > 1 || lastChild {
 		prefix += "  "
@@ -304,74 +303,74 @@ func WritePlan(writer io.Writer, explain *Explain, plan *Plan, prefix string, de
 	currentPrefix = prefix + "│ "
 
 	for _, line := range strings.Split(wordwrap.WrapString(Descriptions[plan.NodeType], 60), "\n") {
-		Output("%v", MutedFormat(line))
+		outputFn("%v", mutedFormat(line))
 	}
 
-	Output("○ %v %v (%.0f%%)", "Duration:", DurationToString(plan.ActualDuration), (plan.ActualDuration/explain.ExecutionTime)*100)
+	outputFn("○ %v %v (%.0f%%)", "Duration:", durationToString(plan.ActualDuration), (plan.ActualDuration/explain.ExecutionTime)*100)
 
-	Output("○ %v %v (%.0f%%)", "Cost:", humanize.Commaf(plan.ActualCost), (plan.ActualCost/explain.TotalCost)*100)
+	outputFn("○ %v %v (%.0f%%)", "Cost:", humanize.Commaf(plan.ActualCost), (plan.ActualCost/explain.TotalCost)*100)
 
-	Output("○ %v %v", "Rows:", humanize.Comma(int64(plan.ActualRows)))
+	outputFn("○ %v %v", "Rows:", humanize.Comma(int64(plan.ActualRows)))
 
 	currentPrefix = currentPrefix + "  "
 
 	if plan.JoinType != "" {
-		Output("%v %v", plan.JoinType, MutedFormat("join"))
+		outputFn("%v %v", plan.JoinType, mutedFormat("join"))
 	}
 
 	if plan.RelationName != "" {
-		Output("%v %v.%v", MutedFormat("on"), plan.Schema, plan.RelationName)
+		outputFn("%v %v.%v", mutedFormat("on"), plan.Schema, plan.RelationName)
 	}
 
 	if plan.IndexName != "" {
-		Output("%v %v", MutedFormat("using"), plan.IndexName)
+		outputFn("%v %v", mutedFormat("using"), plan.IndexName)
 	}
 
 	if plan.IndexCondition != "" {
-		Output("%v %v", MutedFormat("condition"), plan.IndexCondition)
+		outputFn("%v %v", mutedFormat("condition"), plan.IndexCondition)
 	}
 
 	if plan.Filter != "" {
-		Output("%v %v %v", MutedFormat("filter"), plan.Filter, MutedFormat(fmt.Sprintf("[-%v rows]", humanize.Comma(int64(plan.RowsRemovedByFilter)))))
+		outputFn("%v %v %v", mutedFormat("filter"), plan.Filter, mutedFormat(fmt.Sprintf("[-%v rows]", humanize.Comma(int64(plan.RowsRemovedByFilter)))))
 	}
 
 	if plan.HashCondition != "" {
-		Output("%v %v", MutedFormat("on"), plan.HashCondition)
+		outputFn("%v %v", mutedFormat("on"), plan.HashCondition)
 	}
 
 	if plan.CTEName != "" {
-		Output("CTE %v", plan.CTEName)
+		outputFn("CTE %v", plan.CTEName)
 	}
 
 	if plan.PlannerRowEstimateFactor != 0 {
-		Output("%v %vestimated %v %.2fx", MutedFormat("rows"), plan.PlannerRowEstimateDirection, MutedFormat("by"), plan.PlannerRowEstimateFactor)
+		outputFn("%v %vestimated %v %.2fx", mutedFormat("rows"), plan.PlannerRowEstimateDirection, mutedFormat("by"), plan.PlannerRowEstimateFactor)
 	}
 
 	currentPrefix = prefix
 
 	if len(plan.Output) > 0 {
 		for index, line := range strings.Split(wordwrap.WrapString(strings.Join(plan.Output, " + "), 60), "\n") {
-			Output(PrefixFormat(GetTerminator(index, plan)) + OutputFormat(line))
+			outputFn(prefixFormat(getTerminator(index, plan)) + outputFormat(line))
 		}
 	}
 
-	for index, _ := range plan.Plans {
-		WritePlan(writer, explain, &plan.Plans[index], prefix, depth+1, index == len(plan.Plans)-1)
+	for index := range plan.Plans {
+		writePlan(writer, explain, &plan.Plans[index], prefix, depth+1, index == len(plan.Plans)-1)
 	}
 }
 
-func Visualize(writer io.Writer, buffer []byte) error {
+func Visualize(writer io.Writer, reader io.Reader) error {
 	var explain []Explain
 
-	err := json.Unmarshal(buffer, &explain)
+	err := json.NewDecoder(reader).Decode(&explain)
 
 	if err != nil {
 		return err
 	}
 
-	for index, _ := range explain {
-		ProcessExplain(&explain[index])
-		WriteExplain(writer, &explain[index])
+	for index := range explain {
+		processExplain(&explain[index])
+		writeExplain(writer, &explain[index])
 	}
 
 	return nil
