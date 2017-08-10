@@ -27,7 +27,7 @@ Then pipe the resulting query plan into `gocmdpev`.
 On MacOS you can just grab a query on your clipboard and run this one-liner:
 
 ```bash
-pbpaste | sed 's/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | psql -qAt <DATABASE> | gocmdpev
+pbpaste | sed '1s/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' | psql -qXAt <DATABASE> | gocmdpev
 ```
 
 ## Python 3 Bindings
