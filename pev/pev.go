@@ -127,6 +127,11 @@ type Plan struct {
 
 func calculatePlannerEstimate(explain *Explain, plan *Plan) {
 	plan.PlannerRowEstimateFactor = 0
+
+	if plan.PlanRows == plan.ActualRows {
+		return
+	}
+
 	plan.PlannerRowEstimateDirection = Under
 	if plan.PlanRows != 0 {
 		plan.PlannerRowEstimateFactor = float64(plan.ActualRows) / float64(plan.PlanRows)
