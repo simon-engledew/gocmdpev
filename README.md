@@ -6,7 +6,7 @@ A command-line GO Postgres query visualizer, heavily inspired by the excellent (
 ## Usage
 
 ```
-go get github.com/simon-engledew/gocmdpev
+go get -u github.com/simon-engledew/gocmdpev
 ```
 
 or via Homebrew:
