@@ -32,6 +32,8 @@ pbpaste | sed '1s/^/EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) /' |
 
 ## Python 3 Bindings
 
+Tested on python 3.4.2 built with [golang:1.8.3-jessie](https://github.com/docker-library/golang/blob/2a15dfff04accfd31c2a45b3bb7423aa86aa2d60/1.8/jessie/Dockerfile).
+
 Build:
 
 ```bash
