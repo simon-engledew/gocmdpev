@@ -1,7 +1,6 @@
-package main
+package main // import "github.com/simon-engledew/gocmdpev/pybindings"
 
 /*
-
 #define Py_LIMITED_API
 #include <Python.h>
 
@@ -22,12 +21,15 @@ static struct PyModuleDef module = {
    PyModuleDef_HEAD_INIT, "pycmdpev", NULL, -1, methods
 };
 
+PyObject * ReturnNone(void) {
+	Py_RETURN_NONE;
+}
+
 PyMODINIT_FUNC
 PyInit_pycmdpev(void)
 {
     return PyModule_Create(&module);
 }
-
 */
 import "C"
 
@@ -41,6 +43,10 @@ func ArgsString(args *C.PyObject) (string, error) {
 	}
 
 	return C.GoString(a), nil
+}
+
+func ReturnNone() (*C.PyObject) {
+	return C.ReturnNone()
 }
 
 func main() {}

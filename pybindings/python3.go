@@ -29,5 +29,5 @@ func visualize(self, args *C.PyObject) *C.PyObject {
 		C.PyErr_SetString(C.PyExc_RuntimeError, C.CString(fmt.Sprintf("%v", err)))
 	}
 
-	return &C._Py_NoneStruct
+	return ReturnNone()
 }
