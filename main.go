@@ -1,11 +1,11 @@
-package main
+package main // import "github.com/simon-engledew/gocmdpev"
 
 import (
 	"log"
 	"os"
 
 	"github.com/fatih/color"
-	"github.com/simon-engledew/gocmdpev/pev"
+	"github.com/simon-engledew/pev"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 

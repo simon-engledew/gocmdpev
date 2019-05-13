@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simon-engledew/gocmdpev/pev"
+	"github.com/simon-engledew/pev"
 )
 
 /*
