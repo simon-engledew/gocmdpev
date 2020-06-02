@@ -1,5 +1,7 @@
 module github.com/simon-engledew/gocmdpev/pybindings
 
-go 1.12
+go 1.14
 
-require github.com/simon-engledew/pev v0.0.0-20190513135149-ceda29aa18fc
+replace github.com/simon-engledew/gocmdpev/pev => ../pev
+
+require github.com/simon-engledew/gocmdpev/pev v0.0.0-20190513135149-ceda29aa18fc

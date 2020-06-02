@@ -9,7 +9,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/fatih/color v1.9.0
 	github.com/mattn/go-colorable v0.1.6 // indirect
-	github.com/simon-engledew/pev v0.0.0-20190513135149-ceda29aa18fc
+	github.com/simon-engledew/gocmdpev/pev v0.0.0-20190513135149-ceda29aa18fc
 	golang.org/x/sys v0.0.0-20200316230553-a7d97aace0b0 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )

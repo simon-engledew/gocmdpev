@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/fatih/color"
-	"github.com/simon-engledew/pev"
+	"github.com/simon-engledew/gocmdpev/pev"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -19,7 +19,7 @@ func main() {
 	app.VersionFlag.Short('v')
 	app.Parse(os.Args[1:])
 
-	err := pev.Visualize(color.Output, os.Stdin)
+	err := pev.Visualize(color.Output, os.Stdin, 60)
 
 	if err != nil {
 		log.Fatalf("%v", err)
